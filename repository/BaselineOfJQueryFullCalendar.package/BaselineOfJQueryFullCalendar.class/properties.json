@@ -1,0 +1,14 @@
+{
+	"category" : "BaselineOfJQueryFullCalendar",
+	"classinstvars" : [
+		 ],
+	"classvars" : [
+		 ],
+	"commentStamp" : "",
+	"instvars" : [
+		 ],
+	"name" : "BaselineOfJQueryFullCalendar",
+	"pools" : [
+		 ],
+	"super" : "BaselineOf",
+	"type" : "normal" }

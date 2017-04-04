@@ -1,0 +1,24 @@
+{
+	"category" : "JQueryFullCalendar-Core",
+	"classinstvars" : [
+		 ],
+	"classvars" : [
+		 ],
+	"commentStamp" : "PaulDeBruicker 6/5/2011 16:38",
+	"instvars" : [
+		"id",
+		"title",
+		"allDay",
+		"url",
+		"cssClassName",
+		"editable",
+		"timespan",
+		"color",
+		"backgroundColor",
+		"borderColor",
+		"textColor" ],
+	"name" : "JQFullCalendarEvent",
+	"pools" : [
+		 ],
+	"super" : "GRObject",
+	"type" : "normal" }

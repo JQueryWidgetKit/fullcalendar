@@ -1,0 +1,14 @@
+{
+	"category" : "JQueryFullCalendar-Core",
+	"classinstvars" : [
+		 ],
+	"classvars" : [
+		 ],
+	"commentStamp" : "PaulDeBruicker 6/5/2011 16:40",
+	"instvars" : [
+		 ],
+	"name" : "JQFullCalendar",
+	"pools" : [
+		 ],
+	"super" : "JQWidget",
+	"type" : "normal" }

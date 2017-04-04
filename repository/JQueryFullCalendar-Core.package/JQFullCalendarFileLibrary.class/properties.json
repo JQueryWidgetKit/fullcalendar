@@ -1,0 +1,14 @@
+{
+	"category" : "JQueryFullCalendar-Core",
+	"classinstvars" : [
+		 ],
+	"classvars" : [
+		 ],
+	"commentStamp" : "",
+	"instvars" : [
+		 ],
+	"name" : "JQFullCalendarFileLibrary",
+	"pools" : [
+		 ],
+	"super" : "WAFileMetadataLibrary",
+	"type" : "normal" }
