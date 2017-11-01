@@ -4,7 +4,7 @@ var FC = $.fullCalendar = {
 	// When introducing internal API incompatibilities (where fullcalendar plugins would break),
 	// the minor version of the calendar should be upped (ex: 2.7.2 -> 2.8.0)
 	// and the below integer should be incremented.
-	internalApiVersion: 9
+	internalApiVersion: 11
 };
 var fcViews = FC.views = {};
 
@@ -20,14 +20,33 @@ $.fn.fullCalendar = function(options) {
 
 		// a method call
 		if (typeof options === 'string') {
-			if (calendar && $.isFunction(calendar[options])) {
+
+			if (options === 'getCalendar') {
+				if (!i) { // first element only
+					res = calendar;
+				}
+			}
+			else if (options === 'destroy') { // don't warn if no calendar object
+				if (calendar) {
+					calendar.destroy();
+					element.removeData('fullCalendar');
+				}
+			}
+			else if (!calendar) {
+				FC.warn("Attempting to call a FullCalendar method on an element with no calendar.");
+			}
+			else if ($.isFunction(calendar[options])) {
 				singleRes = calendar[options].apply(calendar, args);
+
 				if (!i) {
 					res = singleRes; // record the first method call result
 				}
 				if (options === 'destroy') { // for the destroy method, must remove Calendar object data
 					element.removeData('fullCalendar');
 				}
+			}
+			else {
+				FC.warn("'" + options + "' is an unknown FullCalendar method.");
 			}
 		}
 		// a new calendar initialization

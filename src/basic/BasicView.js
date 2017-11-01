@@ -11,18 +11,27 @@ var BasicView = FC.BasicView = View.extend({
 	dayGridClass: DayGrid, // class the dayGrid will be instantiated from (overridable by subclasses)
 	dayGrid: null, // the main subcomponent that does most of the heavy lifting
 
-	dayNumbersVisible: false, // display day numbers on each day cell?
-	colWeekNumbersVisible: false, // display week numbers along the side?
-	cellWeekNumbersVisible: false, // display week numbers in day cell?
-
 	weekNumberWidth: null, // width of all the week-number cells running down the side
 
-	headContainerEl: null, // div that hold's the dayGrid's rendered date header
-	headRowEl: null, // the fake row element of the day-of-week header
 
+	constructor: function() {
+		View.apply(this, arguments);
 
-	initialize: function() {
 		this.dayGrid = this.instantiateDayGrid();
+		this.dayGrid.isRigid = this.hasRigidRows();
+
+		if (this.opt('weekNumbers')) {
+			if (this.opt('weekNumbersWithinDays')) {
+				this.dayGrid.cellWeekNumbersVisible = true;
+				this.dayGrid.colWeekNumbersVisible = false;
+			}
+			else {
+				this.dayGrid.cellWeekNumbersVisible = false;
+				this.dayGrid.colWeekNumbersVisible = true;
+			};
+		}
+
+		this.addChild(this.dayGrid);
 
 		this.scroller = new Scroller({
 			overflowX: 'hidden',
@@ -42,97 +51,74 @@ var BasicView = FC.BasicView = View.extend({
 
 
 	// Computes the date range that will be rendered.
-	buildRenderRange: function(currentRange, currentRangeUnit) {
-		var renderRange = View.prototype.buildRenderRange.apply(this, arguments);
+	buildRenderRange: function(currentUnzonedRange, currentRangeUnit, isRangeAllDay) {
+		var renderUnzonedRange = View.prototype.buildRenderRange.apply(this, arguments); // an UnzonedRange
+		var start = this.calendar.msToUtcMoment(renderUnzonedRange.startMs, isRangeAllDay);
+		var end = this.calendar.msToUtcMoment(renderUnzonedRange.endMs, isRangeAllDay);
 
 		// year and month views should be aligned with weeks. this is already done for week
 		if (/^(year|month)$/.test(currentRangeUnit)) {
-			renderRange.start.startOf('week');
+			start.startOf('week');
 
 			// make end-of-week if not already
-			if (renderRange.end.weekday()) {
-				renderRange.end.add(1, 'week').startOf('week'); // exclusively move backwards
+			if (end.weekday()) {
+				end.add(1, 'week').startOf('week'); // exclusively move backwards
 			}
 		}
 
-		return this.trimHiddenDays(renderRange);
+		return new UnzonedRange(start, end);
 	},
 
 
-	// Renders the view into `this.el`, which should already be assigned
-	renderDates: function() {
+	executeDateRender: function(dateProfile) {
+		this.dayGrid.breakOnWeeks = /year|month|week/.test(dateProfile.currentRangeUnit);
 
-		this.dayGrid.breakOnWeeks = /year|month|week/.test(this.currentRangeUnit); // do before Grid::setRange
-		this.dayGrid.setRange(this.renderRange);
+		View.prototype.executeDateRender.apply(this, arguments);
+	},
 
-		this.dayNumbersVisible = this.dayGrid.rowCnt > 1; // TODO: make grid responsible
-		if (this.opt('weekNumbers')) {
-			if (this.opt('weekNumbersWithinDays')) {
-				this.cellWeekNumbersVisible = true;
-				this.colWeekNumbersVisible = false;
-			}
-			else {
-				this.cellWeekNumbersVisible = false;
-				this.colWeekNumbersVisible = true;
-			};
-		}
-		this.dayGrid.numbersVisible = this.dayNumbersVisible ||
-			this.cellWeekNumbersVisible || this.colWeekNumbersVisible;
+
+	renderSkeleton: function() {
+		var dayGridContainerEl;
+		var dayGridEl;
 
 		this.el.addClass('fc-basic-view').html(this.renderSkeletonHtml());
-		this.renderHead();
 
 		this.scroller.render();
-		var dayGridContainerEl = this.scroller.el.addClass('fc-day-grid-container');
-		var dayGridEl = $('<div class="fc-day-grid" />').appendTo(dayGridContainerEl);
+
+		dayGridContainerEl = this.scroller.el.addClass('fc-day-grid-container');
+		dayGridEl = $('<div class="fc-day-grid" />').appendTo(dayGridContainerEl);
+
 		this.el.find('.fc-body > tr > td').append(dayGridContainerEl);
 
+		this.dayGrid.headContainerEl = this.el.find('.fc-head-container');
 		this.dayGrid.setElement(dayGridEl);
-		this.dayGrid.renderDates(this.hasRigidRows());
 	},
 
 
-	// render the day-of-week headers
-	renderHead: function() {
-		this.headContainerEl =
-			this.el.find('.fc-head-container')
-				.html(this.dayGrid.renderHeadHtml());
-		this.headRowEl = this.headContainerEl.find('.fc-row');
-	},
-
-
-	// Unrenders the content of the view. Since we haven't separated skeleton rendering from date rendering,
-	// always completely kill the dayGrid's rendering.
-	unrenderDates: function() {
-		this.dayGrid.unrenderDates();
+	unrenderSkeleton: function() {
 		this.dayGrid.removeElement();
 		this.scroller.destroy();
-	},
-
-
-	renderBusinessHours: function() {
-		this.dayGrid.renderBusinessHours();
-	},
-
-
-	unrenderBusinessHours: function() {
-		this.dayGrid.unrenderBusinessHours();
 	},
 
 
 	// Builds the HTML skeleton for the view.
 	// The day-grid component will render inside of a container defined by this HTML.
 	renderSkeletonHtml: function() {
+		var theme = this.calendar.theme;
+
 		return '' +
-			'<table>' +
-				'<thead class="fc-head">' +
-					'<tr>' +
-						'<td class="fc-head-container ' + this.widgetHeaderClass + '"></td>' +
-					'</tr>' +
-				'</thead>' +
+			'<table class="' + theme.getClass('tableGrid') + '">' +
+				(this.opt('columnHeader') ?
+					'<thead class="fc-head">' +
+						'<tr>' +
+							'<td class="fc-head-container ' + theme.getClass('widgetHeader') + '">&nbsp;</td>' +
+						'</tr>' +
+					'</thead>' :
+					''
+					) +
 				'<tbody class="fc-body">' +
 					'<tr>' +
-						'<td class="' + this.widgetContentClass + '"></td>' +
+						'<td class="' + theme.getClass('widgetContent') + '"></td>' +
 					'</tr>' +
 				'</tbody>' +
 			'</table>';
@@ -151,6 +137,7 @@ var BasicView = FC.BasicView = View.extend({
 	// Determines whether each row should have a constant height
 	hasRigidRows: function() {
 		var eventLimit = this.opt('eventLimit');
+
 		return eventLimit && typeof eventLimit !== 'number';
 	},
 
@@ -160,26 +147,35 @@ var BasicView = FC.BasicView = View.extend({
 
 
 	// Refreshes the horizontal dimensions of the view
-	updateWidth: function() {
-		if (this.colWeekNumbersVisible) {
+	updateSize: function(totalHeight, isAuto, isResize) {
+		var eventLimit = this.opt('eventLimit');
+		var headRowEl = this.dayGrid.headContainerEl.find('.fc-row');
+		var scrollerHeight;
+		var scrollbarWidths;
+
+		// hack to give the view some height prior to dayGrid's columns being rendered
+		// TODO: separate setting height from scroller VS dayGrid.
+		if (!this.dayGrid.rowEls) {
+			if (!isAuto) {
+				scrollerHeight = this.computeScrollerHeight(totalHeight);
+				this.scroller.setHeight(scrollerHeight);
+			}
+			return;
+		}
+
+		View.prototype.updateSize.apply(this, arguments);
+
+		if (this.dayGrid.colWeekNumbersVisible) {
 			// Make sure all week number cells running down the side have the same width.
 			// Record the width for cells created later.
 			this.weekNumberWidth = matchCellWidths(
 				this.el.find('.fc-week-number')
 			);
 		}
-	},
-
-
-	// Adjusts the vertical dimensions of the view to the specified values
-	setHeight: function(totalHeight, isAuto) {
-		var eventLimit = this.opt('eventLimit');
-		var scrollerHeight;
-		var scrollbarWidths;
 
 		// reset all heights to be natural
 		this.scroller.clear();
-		uncompensateScroll(this.headRowEl);
+		uncompensateScroll(headRowEl);
 
 		this.dayGrid.removeSegPopover(); // kill the "more" popover if displayed
 
@@ -205,7 +201,7 @@ var BasicView = FC.BasicView = View.extend({
 
 			if (scrollbarWidths.left || scrollbarWidths.right) { // using scrollbars?
 
-				compensateScroll(this.headRowEl, scrollbarWidths);
+				compensateScroll(headRowEl, scrollbarWidths);
 
 				// doing the scrollbar compensation might have created text overflow which created more height. redo
 				scrollerHeight = this.computeScrollerHeight(totalHeight);
@@ -240,134 +236,41 @@ var BasicView = FC.BasicView = View.extend({
 	------------------------------------------------------------------------------------------------------------------*/
 
 
-	computeInitialScroll: function() {
+	computeInitialDateScroll: function() {
 		return { top: 0 };
 	},
 
 
-	queryScroll: function() {
+	queryDateScroll: function() {
 		return { top: this.scroller.getScrollTop() };
 	},
 
 
-	setScroll: function(scroll) {
-		this.scroller.setScrollTop(scroll.top);
-	},
-
-
-	/* Hit Areas
-	------------------------------------------------------------------------------------------------------------------*/
-	// forward all hit-related method calls to dayGrid
-
-
-	hitsNeeded: function() {
-		this.dayGrid.hitsNeeded();
-	},
-
-
-	hitsNotNeeded: function() {
-		this.dayGrid.hitsNotNeeded();
-	},
-
-
-	prepareHits: function() {
-		this.dayGrid.prepareHits();
-	},
-
-
-	releaseHits: function() {
-		this.dayGrid.releaseHits();
-	},
-
-
-	queryHit: function(left, top) {
-		return this.dayGrid.queryHit(left, top);
-	},
-
-
-	getHitSpan: function(hit) {
-		return this.dayGrid.getHitSpan(hit);
-	},
-
-
-	getHitEl: function(hit) {
-		return this.dayGrid.getHitEl(hit);
-	},
-
-
-	/* Events
-	------------------------------------------------------------------------------------------------------------------*/
-
-
-	// Renders the given events onto the view and populates the segments array
-	renderEvents: function(events) {
-		this.dayGrid.renderEvents(events);
-
-		this.updateHeight(); // must compensate for events that overflow the row
-	},
-
-
-	// Retrieves all segment objects that are rendered in the view
-	getEventSegs: function() {
-		return this.dayGrid.getEventSegs();
-	},
-
-
-	// Unrenders all event elements and clears internal segment data
-	unrenderEvents: function() {
-		this.dayGrid.unrenderEvents();
-
-		// we DON'T need to call updateHeight() because
-		// a renderEvents() call always happens after this, which will eventually call updateHeight()
-	},
-
-
-	/* Dragging (for both events and external elements)
-	------------------------------------------------------------------------------------------------------------------*/
-
-
-	// A returned value of `true` signals that a mock "helper" event has been rendered.
-	renderDrag: function(dropLocation, seg) {
-		return this.dayGrid.renderDrag(dropLocation, seg);
-	},
-
-
-	unrenderDrag: function() {
-		this.dayGrid.unrenderDrag();
-	},
-
-
-	/* Selection
-	------------------------------------------------------------------------------------------------------------------*/
-
-
-	// Renders a visual indication of a selection
-	renderSelection: function(span) {
-		this.dayGrid.renderSelection(span);
-	},
-
-
-	// Unrenders a visual indications of a selection
-	unrenderSelection: function() {
-		this.dayGrid.unrenderSelection();
+	applyDateScroll: function(scroll) {
+		if (scroll.top !== undefined) {
+			this.scroller.setScrollTop(scroll.top);
+		}
 	}
 
 });
 
 
 // Methods that will customize the rendering behavior of the BasicView's dayGrid
-var basicDayGridMethods = {
+var basicDayGridMethods = { // not relly methods anymore
+
+
+	colWeekNumbersVisible: false, // display week numbers along the side?
 
 
 	// Generates the HTML that will go before the day-of week header cells
 	renderHeadIntroHtml: function() {
 		var view = this.view;
 
-		if (view.colWeekNumbersVisible) {
+		if (this.colWeekNumbersVisible) {
 			return '' +
-				'<th class="fc-week-number ' + view.widgetHeaderClass + '" ' + view.weekNumberStyleAttr() + '>' +
+				'<th class="fc-week-number ' + view.calendar.theme.getClass('widgetHeader') + '" ' + view.weekNumberStyleAttr() + '>' +
 					'<span>' + // needed for matchCellWidths
-						htmlEscape(view.opt('weekNumberTitle')) +
+						htmlEscape(this.opt('weekNumberTitle')) +
 					'</span>' +
 				'</th>';
 		}
@@ -381,7 +284,7 @@ var basicDayGridMethods = {
 		var view = this.view;
 		var weekStart = this.getCellDate(row, 0);
 
-		if (view.colWeekNumbersVisible) {
+		if (this.colWeekNumbersVisible) {
 			return '' +
 				'<td class="fc-week-number" ' + view.weekNumberStyleAttr() + '>' +
 					view.buildGotoAnchorHtml( // aside from link, important for matchCellWidths
@@ -399,8 +302,8 @@ var basicDayGridMethods = {
 	renderBgIntroHtml: function() {
 		var view = this.view;
 
-		if (view.colWeekNumbersVisible) {
-			return '<td class="fc-week-number ' + view.widgetContentClass + '" ' +
+		if (this.colWeekNumbersVisible) {
+			return '<td class="fc-week-number ' + view.calendar.theme.getClass('widgetContent') + '" ' +
 				view.weekNumberStyleAttr() + '></td>';
 		}
 
@@ -413,11 +316,16 @@ var basicDayGridMethods = {
 	renderIntroHtml: function() {
 		var view = this.view;
 
-		if (view.colWeekNumbersVisible) {
+		if (this.colWeekNumbersVisible) {
 			return '<td class="fc-week-number" ' + view.weekNumberStyleAttr() + '></td>';
 		}
 
 		return '';
+	},
+
+
+	getIsNumbersVisible: function() {
+		return DayGrid.prototype.getIsNumbersVisible.apply(this, arguments) || this.colWeekNumbersVisible;
 	}
 
 };

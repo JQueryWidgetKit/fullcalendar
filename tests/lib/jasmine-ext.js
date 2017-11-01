@@ -176,10 +176,11 @@ beforeEach(function() {
 					var otherBounds = getBounds(expected);
 					var result = {
 						pass: subjectBounds && otherBounds &&
-							subjectBounds.right > otherBounds.left &&
-							subjectBounds.left < otherBounds.right &&
-							subjectBounds.bottom > otherBounds.top &&
-							subjectBounds.top < otherBounds.bottom
+							subjectBounds.right - 1 > otherBounds.left &&
+							subjectBounds.left + 1 < otherBounds.right &&
+							subjectBounds.bottom - 1 > otherBounds.top &&
+							subjectBounds.top + 1 < otherBounds.bottom
+							// +/-1 because of zoom
 					};
 					if (!result.pass) {
 						result.message = 'Element does not intersect with other element';
@@ -205,25 +206,52 @@ beforeEach(function() {
 	}
 
 	function getBounds(node) {
-		var el = $(node);
-		var offset = el.offset();
-
-		if (!offset) {
-			return false;
-		}
-
-		return {
-			top: offset.top,
-			left: offset.left,
-			right: offset.left + el.outerWidth(),
-			bottom: offset.top + el.outerHeight()
-		};
+		return $(node)[0].getBoundingClientRect();
 	}
 
 });
 
-// Destroy the calendar afterwards, to prevent memory leaks
+
+function spyOnMethod(Class, methodName, dontCallThrough) {
+	var origMethod = Class.prototype.hasOwnProperty(methodName) ?
+		Class.prototype[methodName] :
+		null;
+
+	var spy = spyOn(Class.prototype, methodName);
+
+	if (!dontCallThrough) {
+		spy = spy.and.callThrough();
+	}
+
+	spy.restore = function() {
+		if (origMethod) {
+			Class.prototype[methodName] = origMethod;
+		}
+		else {
+			delete Class.prototype[methodName];
+		}
+	};
+
+	return spy;
+}
+
+
+// fix bug with jQuery 3 returning 0 height for <td> elements in the IE's
+[ 'height', 'outerHeight' ].forEach(function(methodName) {
+	var orig = $.fn[methodName];
+
+	$.fn[methodName] = function() {
+		if (!arguments.length && this.is('td')) {
+			return this[0].getBoundingClientRect().height;
+		}
+		else {
+			return orig.apply(this, arguments);
+		}
+	};
+});
+
+// Destroy all calendars afterwards, to prevent memory leaks
 // (not the best place for this)
 afterEach(function() {
-	$('#calendar,#cal').fullCalendar('destroy'); // common id's for calendars in tests
+	$('.fc').fullCalendar('destroy');
 });

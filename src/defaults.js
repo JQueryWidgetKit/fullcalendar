@@ -10,6 +10,7 @@ Calendar.defaults = {
 	nextDayThreshold: '09:00:00', // 9am
 
 	// display
+	columnHeader: true,
 	defaultView: 'month',
 	aspectRatio: 1.35,
 	header: {
@@ -55,24 +56,16 @@ Calendar.defaults = {
 		week: 'week',
 		day: 'day'
 	},
-
-	buttonIcons: {
-		prev: 'left-single-arrow',
-		next: 'right-single-arrow',
-		prevYear: 'left-double-arrow',
-		nextYear: 'right-double-arrow'
-	},
+	//buttonIcons: null,
 
 	allDayText: 'all-day',
+
+	// allows setting a min-height to the event segment to prevent short events overlapping each other
+	agendaEventMinHeight: 0,
 	
 	// jquery-ui theming
 	theme: false,
-	themeButtonIcons: {
-		prev: 'circle-triangle-w',
-		next: 'circle-triangle-e',
-		prevYear: 'seek-prev',
-		nextYear: 'seek-next'
-	},
+	//themeButtonIcons: null,
 
 	//eventResizableFromStart: false,
 	dragOpacity: .75,

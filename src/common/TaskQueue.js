@@ -1,65 +1,83 @@
 
-// TODO: write tests and clean up code
+var TaskQueue = Class.extend(EmitterMixin, {
 
-function TaskQueue(debounceWait) {
-	var q = []; // array of runFuncs
+	q: null,
+	isPaused: false,
+	isRunning: false,
 
-	function addTask(taskFunc) {
-		return new Promise(function(resolve) {
 
-			// should run this function when it's taskFunc's turn to run.
-			// responsible for popping itself off the queue.
-			var runFunc = function() {
-				Promise.resolve(taskFunc()) // result might be async, coerce to promise
-					.then(resolve) // resolve TaskQueue::push's promise, for the caller. will receive result of taskFunc.
-					.then(function() {
-						q.shift(); // pop itself off
+	constructor: function() {
+		this.q = [];
+	},
 
-						// run the next task, if any
-						if (q.length) {
-							q[0]();
-						}
-					});
-			};
 
-			// always put the task at the end of the queue, BEFORE running the task
-			q.push(runFunc);
+	queue: function(/* taskFunc, taskFunc... */) {
+		this.q.push.apply(this.q, arguments); // append
+		this.tryStart();
+	},
 
-			// if it's the only task in the queue, run immediately
-			if (q.length === 1) {
-				runFunc();
+
+	pause: function() {
+		this.isPaused = true;
+	},
+
+
+	resume: function() {
+		this.isPaused = false;
+		this.tryStart();
+	},
+
+
+	getIsIdle: function() {
+		return !this.isRunning && !this.isPaused;
+	},
+
+
+	tryStart: function() {
+		if (!this.isRunning && this.canRunNext()) {
+			this.isRunning = true;
+			this.trigger('start');
+			this.runRemaining();
+		}
+	},
+
+
+	canRunNext: function() {
+		return !this.isPaused && this.q.length;
+	},
+
+
+	runRemaining: function() { // assumes at least one task in queue. does not check canRunNext for first task.
+		var _this = this;
+		var task;
+		var res;
+
+		do {
+			task = this.q.shift(); // always freshly reference q. might have been reassigned.
+			res = this.runTask(task);
+
+			if (res && res.then) {
+				res.then(function() { // jshint ignore:line
+					if (_this.canRunNext()) {
+						_this.runRemaining();
+					}
+				});
+				return; // prevent marking as stopped
 			}
-		});
+		} while (this.canRunNext());
+
+		this.trigger('stop'); // not really a 'stop' ... more of a 'drained'
+		this.isRunning = false;
+
+		// if 'stop' handler added more tasks.... TODO: write test for this
+		this.tryStart();
+	},
+
+
+	runTask: function(task) {
+		return task(); // task *is* the function, but subclasses can change the format of a task
 	}
 
-	this.add = // potentially debounce, for the public method
-		typeof debounceWait === 'number' ?
-			debounce(addTask, debounceWait) :
-			addTask; // if not a number (null/undefined/false), no debounce at all
-
-	this.addQuickly = addTask; // guaranteed no debounce
-}
+});
 
 FC.TaskQueue = TaskQueue;
-
-/*
-q = new TaskQueue();
-
-function work(i) {
-	return q.push(function() {
-		trigger();
-		console.log('work' + i);
-	});
-}
-
-var cnt = 0;
-
-function trigger() {
-	if (cnt < 5) {
-		cnt++;
-		work(cnt);
-	}
-}
-
-work(9);
-*/
