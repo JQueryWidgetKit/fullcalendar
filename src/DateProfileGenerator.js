@@ -1,13 +1,27 @@
 
-View.mixin({
+var DateProfileGenerator = Class.extend({
 
-	usesMinMaxTime: false, // whether minTime/maxTime will affect the activeUnzonedRange. Views must opt-in.
+	_view: null, // avoid
 
-	// DEPRECATED
-	start: null, // use activeUnzonedRange
-	end: null, // use activeUnzonedRange
-	intervalStart: null, // use currentUnzonedRange
-	intervalEnd: null, // use currentUnzonedRange
+
+	constructor: function(_view) {
+		this._view = _view;
+	},
+
+
+	opt: function(name) {
+		return this._view.opt(name);
+	},
+
+
+	trimHiddenDays: function(unzonedRange) {
+		return this._view.trimHiddenDays(unzonedRange);
+	},
+
+
+	msToUtcMoment: function(ms, forceAllDay) {
+		return this._view.calendar.msToUtcMoment(ms, forceAllDay);
+	},
 
 
 	/* Date Range Computation
@@ -15,29 +29,29 @@ View.mixin({
 
 
 	// Builds a structure with info about what the dates/ranges will be for the "prev" view.
-	buildPrevDateProfile: function(date) {
-		var dateProfile = this.get('dateProfile');
-		var prevDate = date.clone().startOf(dateProfile.currentRangeUnit)
-			.subtract(dateProfile.dateIncrement);
+	buildPrev: function(currentDateProfile) {
+		var prevDate = currentDateProfile.date.clone()
+			.startOf(currentDateProfile.currentRangeUnit)
+			.subtract(currentDateProfile.dateIncrement);
 
-		return this.buildDateProfile(prevDate, -1);
+		return this.build(prevDate, -1);
 	},
 
 
 	// Builds a structure with info about what the dates/ranges will be for the "next" view.
-	buildNextDateProfile: function(date) {
-		var dateProfile = this.get('dateProfile');
-		var nextDate = date.clone().startOf(dateProfile.currentRangeUnit)
-			.add(dateProfile.dateIncrement);
+	buildNext: function(currentDateProfile) {
+		var nextDate = currentDateProfile.date.clone()
+			.startOf(currentDateProfile.currentRangeUnit)
+			.add(currentDateProfile.dateIncrement);
 
-		return this.buildDateProfile(nextDate, 1);
+		return this.build(nextDate, 1);
 	},
 
 
 	// Builds a structure holding dates/ranges for rendering around the given date.
 	// Optional direction param indicates whether the date is being incremented/decremented
 	// from its previous value. decremented = -1, incremented = 1 (default).
-	buildDateProfile: function(date, direction, forceToValid) {
+	build: function(date, direction, forceToValid) {
 		var isDateAllDay = !date.hasTime();
 		var validUnzonedRange;
 		var minTime = null;
@@ -52,7 +66,7 @@ View.mixin({
 		validUnzonedRange = this.trimHiddenDays(validUnzonedRange);
 
 		if (forceToValid) {
-			date = this.calendar.msToUtcMoment(
+			date = this.msToUtcMoment(
 				validUnzonedRange.constrainDate(date), // returns MS
 				isDateAllDay
 			);
@@ -78,7 +92,7 @@ View.mixin({
 		activeUnzonedRange = activeUnzonedRange.intersect(validUnzonedRange); // might return null
 
 		if (activeUnzonedRange) {
-			date = this.calendar.msToUtcMoment(
+			date = this.msToUtcMoment(
 				activeUnzonedRange.constrainDate(date), // returns MS
 				isDateAllDay
 			);
@@ -131,25 +145,26 @@ View.mixin({
 	// Indicates the minimum/maximum dates to display.
 	// not responsible for trimming hidden days.
 	buildValidRange: function() {
-		return this.getUnzonedRangeOption('validRange', this.calendar.getNow()) ||
+		return this._view.getUnzonedRangeOption('validRange', this._view.calendar.getNow()) ||
 			new UnzonedRange(); // completely open-ended
 	},
 
 
 	// Builds a structure with info about the "current" range, the range that is
 	// highlighted as being the current month for example.
-	// See buildDateProfile for a description of `direction`.
+	// See build() for a description of `direction`.
 	// Guaranteed to have `range` and `unit` properties. `duration` is optional.
 	// TODO: accept a MS-time instead of a moment `date`?
 	buildCurrentRangeInfo: function(date, direction) {
+		var viewSpec = this._view.viewSpec;
 		var duration = null;
 		var unit = null;
 		var unzonedRange = null;
 		var dayCount;
 
-		if (this.viewSpec.duration) {
-			duration = this.viewSpec.duration;
-			unit = this.viewSpec.durationUnit;
+		if (viewSpec.duration) {
+			duration = viewSpec.duration;
+			unit = viewSpec.durationUnit;
 			unzonedRange = this.buildRangeFromDuration(date, direction, duration, unit);
 		}
 		else if ((dayCount = this.opt('dayCount'))) {
@@ -180,7 +195,7 @@ View.mixin({
 		var start = unzonedRange.getStart();
 		var end = unzonedRange.getEnd();
 
-		if (this.usesMinMaxTime) {
+		if (this._view.usesMinMaxTime) {
 
 			if (minTime < 0) {
 				start.time(0).add(minTime);
@@ -200,18 +215,11 @@ View.mixin({
 	// TODO: accept a MS-time instead of a moment `date`?
 	buildRangeFromDuration: function(date, direction, duration, unit) {
 		var alignment = this.opt('dateAlignment');
-		var start = date.clone();
-		var end;
 		var dateIncrementInput;
 		var dateIncrementDuration;
-
-		// if the view displays a single day or smaller
-		if (duration.as('days') <= 1) {
-			if (this.isHiddenDay(start)) {
-				start = this.skipHiddenDays(start, direction);
-				start.startOf('day');
-			}
-		}
+		var start;
+		var end;
+		var res;
 
 		// compute what the alignment should be
 		if (!alignment) {
@@ -233,10 +241,29 @@ View.mixin({
 			}
 		}
 
-		start.startOf(alignment);
-		end = start.clone().add(duration);
+		// if the view displays a single day or smaller
+		if (duration.as('days') <= 1) {
+			if (this._view.isHiddenDay(start)) {
+				start = this._view.skipHiddenDays(start, direction);
+				start.startOf('day');
+			}
+		}
 
-		return new UnzonedRange(start, end);
+		function computeRes() {
+			start = date.clone().startOf(alignment);
+			end = start.clone().add(duration);
+			res = new UnzonedRange(start, end);
+		}
+
+		computeRes();
+
+		// if range is completely enveloped by hidden days, go past the hidden days
+		if (!this.trimHiddenDays(res)) {
+			date = this._view.skipHiddenDays(date, direction);
+			computeRes();
+		}
+
+		return res;
 	},
 
 
@@ -253,12 +280,12 @@ View.mixin({
 		}
 
 		start.startOf('day');
-		start = this.skipHiddenDays(start, direction);
+		start = this._view.skipHiddenDays(start, direction);
 
 		end = start.clone();
 		do {
 			end.add(1, 'day');
-			if (!this.isHiddenDay(end)) {
+			if (!this._view.isHiddenDay(end)) {
 				runningCount++;
 			}
 		} while (runningCount < dayCount);
@@ -271,9 +298,9 @@ View.mixin({
 	// which is a way to define the currentUnzonedRange and activeUnzonedRange at the same time.
 	// TODO: accept a MS-time instead of a moment `date`?
 	buildCustomVisibleRange: function(date) {
-		var visibleUnzonedRange = this.getUnzonedRangeOption(
+		var visibleUnzonedRange = this._view.getUnzonedRangeOption(
 			'visibleRange',
-			this.calendar.applyTimezone(date) // correct zone. also generates new obj that avoids mutations
+			this._view.calendar.applyTimezone(date) // correct zone. also generates new obj that avoids mutations
 		);
 
 		if (visibleUnzonedRange && (visibleUnzonedRange.startMs === null || visibleUnzonedRange.endMs === null)) {
@@ -310,106 +337,6 @@ View.mixin({
 		else {
 			return moment.duration({ days: 1 });
 		}
-	},
-
-
-	// Remove days from the beginning and end of the range that are computed as hidden.
-	trimHiddenDays: function(inputUnzonedRange) {
-		var start = inputUnzonedRange.getStart();
-		var end = inputUnzonedRange.getEnd();
-
-		if (start) {
-			start = this.skipHiddenDays(start);
-		}
-
-		if (end) {
-			end = this.skipHiddenDays(end, -1, true);
-		}
-
-		return new UnzonedRange(start, end);
-	},
-
-
-	// For DateComponent::getDayClasses
-	isDateInOtherMonth: function(date, dateProfile) {
-		return false;
-	},
-
-
-	// Arguments after name will be forwarded to a hypothetical function value
-	// WARNING: passed-in arguments will be given to generator functions as-is and can cause side-effects.
-	// Always clone your objects if you fear mutation.
-	getUnzonedRangeOption: function(name) {
-		var val = this.opt(name);
-
-		if (typeof val === 'function') {
-			val = val.apply(
-				null,
-				Array.prototype.slice.call(arguments, 1)
-			);
-		}
-
-		if (val) {
-			return this.calendar.parseUnzonedRange(val);
-		}
-	},
-
-
-	/* Hidden Days
-	------------------------------------------------------------------------------------------------------------------*/
-
-
-	// Initializes internal variables related to calculating hidden days-of-week
-	initHiddenDays: function() {
-		var hiddenDays = this.opt('hiddenDays') || []; // array of day-of-week indices that are hidden
-		var isHiddenDayHash = []; // is the day-of-week hidden? (hash with day-of-week-index -> bool)
-		var dayCnt = 0;
-		var i;
-
-		if (this.opt('weekends') === false) {
-			hiddenDays.push(0, 6); // 0=sunday, 6=saturday
-		}
-
-		for (i = 0; i < 7; i++) {
-			if (
-				!(isHiddenDayHash[i] = $.inArray(i, hiddenDays) !== -1)
-			) {
-				dayCnt++;
-			}
-		}
-
-		if (!dayCnt) {
-			throw 'invalid hiddenDays'; // all days were hidden? bad.
-		}
-
-		this.isHiddenDayHash = isHiddenDayHash;
-	},
-
-
-	// Is the current day hidden?
-	// `day` is a day-of-week index (0-6), or a Moment
-	isHiddenDay: function(day) {
-		if (moment.isMoment(day)) {
-			day = day.day();
-		}
-		return this.isHiddenDayHash[day];
-	},
-
-
-	// Incrementing the current day until it is no longer a hidden day, returning a copy.
-	// DOES NOT CONSIDER validUnzonedRange!
-	// If the initial value of `date` is not a hidden day, don't do anything.
-	// Pass `isExclusive` as `true` if you are dealing with an end date.
-	// `inc` defaults to `1` (increment one day forward each time)
-	skipHiddenDays: function(date, inc, isExclusive) {
-		var out = date.clone();
-		inc = inc || 1;
-		while (
-			this.isHiddenDayHash[(out.day() + (isExclusive ? inc : 0) + 7) % 7]
-		) {
-			out.add(inc, 'days');
-		}
-		return out;
 	}
 
 });
