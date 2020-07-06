@@ -1,0 +1,30 @@
+uploaded
+localesesJsContent
+	^ 'FullCalendar.globalLocales.push(function () {
+  ''use strict'';
+
+  var es = {
+    code: "es",
+    week: {
+      dow: 1, // Monday is the first day of the week.
+      doy: 4  // The week that contains Jan 4th is the first week of the year.
+    },
+    buttonText: {
+      prev: "Ant",
+      next: "Sig",
+      today: "Hoy",
+      month: "Mes",
+      week: "Semana",
+      day: "DÃ­a",
+      list: "Agenda"
+    },
+    weekText: "Sm",
+    allDayText: "Todo el dÃ­a",
+    moreLinkText: "mÃ¡s",
+    noEventsText: "No hay eventos para mostrar"
+  };
+
+  return es;
+
+}());
+'

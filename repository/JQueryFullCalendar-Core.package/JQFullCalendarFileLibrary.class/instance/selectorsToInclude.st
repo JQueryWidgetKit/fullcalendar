@@ -1,3 +1,3 @@
 accessing
 selectorsToInclude
-  ^ #('jsmomentminJs' 'jsfullcalendarminJs' 'cssfullcalendarminCss')
+  ^ #('mainCss' 'mainJs')

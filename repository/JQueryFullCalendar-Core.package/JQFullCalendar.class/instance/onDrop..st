@@ -21,6 +21,4 @@ To see this callback function in action, view the droppable article or look at t
 
 "
 
-  self
-    optionAt: 'drop'
-    put: (aCallback asFunction: #('date' 'event' 'ui' 'resourceId'))
+  self optionAt: 'drop' put: (aCallback asFunction: #('dropInfo'))

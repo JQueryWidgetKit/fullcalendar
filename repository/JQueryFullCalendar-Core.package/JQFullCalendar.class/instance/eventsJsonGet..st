@@ -53,8 +53,9 @@ $('#calendar').fullCalendar({
       ((self jQuery getJson
         text: [ :stream | stream json: (aTwoArgumentBlock value: start value: end) ];
         callback: [ :value | start := DateAndTime fromFullCalendar: value ]
-          value: (JSStream on: 'start.format("D/M/YYYY H:M:S Z")');
+          value: (JSStream on: 'fetchInfo.startStr');
         callback: [ :value | end := DateAndTime fromFullCalendar: value ]
-          value: (JSStream on: 'end.format("D/M/YYYY H:M:S Z")');
-        onSuccess: 'callback(arguments[0])';
-        dataType: 'json') asFunction: #('start' 'end' 'timezone' 'callback'))
+          value: (JSStream on: 'fetchInfo.endStr');
+        onSuccess: 'successCallback(arguments[0])';
+        dataType: 'json')
+        asFunction: #('fetchInfo' 'successCallback' 'failureCallback'))
